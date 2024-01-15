@@ -1,0 +1,52 @@
+pipeline {
+    agent any
+    environment {
+        DISCORD = credentials('DISCORD')
+    }
+    stages {
+        stage ('build') {
+            agent {
+                docker {
+                    image 'golang:alpine3.16'
+                    label 'fire'
+                }
+            }
+            steps {
+                echo "Build App "
+                sh '''
+                 #/bin/sh
+                 go version
+                 GOCACHE=/tmp/ GOOS=linux GOARCH=386 go build -o golang-sample main.go
+                '''
+                stash includes: 'golang-sample', name: 'GOAPP_ARTIFACT'
+            }
+        }
+        stage ('test') {
+            steps {
+                echo "test App"
+            }
+        }
+        stage ('Deploy') {
+            environment {
+                GOAPP_SSH_KEY = credentials('goapp_ssh')
+            }
+            steps {
+                echo "Deploy App"
+                unstash name: 'GOAPP_ARTIFACT'
+                sh 'ssh -o StrictHostKeyChecking=no -i $GOAPP_SSH_KEY perdanar@34.128.127.66 "sudo systemctl stop goapp.service"'
+                sh 'scp -o StrictHostKeyChecking=no -i "$GOAPP_SSH_KEY" golang-sample perdanar@34.128.127.66:~/golang-sample'
+                sh 'ssh -o StrictHostKeyChecking=no -i $GOAPP_SSH_KEY perdanar@34.128.127.66 "sudo systemctl start goapp.service"'
+            }
+        }
+    }
+    post {
+        success {
+            echo "Post Success"
+            discordSend description: "Jenkins Pipeline Deploy", footer: "Deploy Success", link: env.BUILD_URL, result: currentBuild.currentResult, title: JOB_NAME, webhookURL: "$DISCORD"
+        }
+        failure {
+            echo "Post Failure"
+            discordSend description: "Jenkins Pipeline Deploy", footer: "Deploy Failure", link: env.BUILD_URL, result: currentBuild.currentResult, title: JOB_NAME, webhookURL: "$DISCORD"
+        }
+    }
+}

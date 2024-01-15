@@ -1,0 +1,71 @@
+pipeline {
+    agent {
+        label 'fire'
+    }
+    stages {
+        stage ('build') {
+            steps {
+                echo "Build App"
+                sh 'docker build -t gcr.io/studi-devops-370205/studidevsecops:${BUILD_NUMBER} .'
+            }
+        }
+        stage ('Push to GCR') {
+            environment {
+                GCP_REGISTRY = credentials('gcp_service_account_storage')
+                NOTIF = credentials('DISCORD')
+            }
+            steps {
+                echo "push to gcr"
+                sh 'cat "$GCP_REGISTRY" | docker login -u _json_key --password-stdin https://gcr.io'
+                sh 'docker push gcr.io/studi-devops-370205/studidevsecops:${BUILD_NUMBER}'
+            }
+            post {
+                success {
+                    echo "Post Success"
+                    discordSend description: "Jenkins Pipeline Build", footer: "Build Success ${BUILD_NUMBER}", link: env.BUILD_URL, result: currentBuild.currentResult, title: JOB_NAME, webhookURL: "$NOTIF"
+                }
+                failure {
+                    echo "Post Failure"
+                    discordSend description: "Jenkins Pipeline Build", footer: "Build Failure ${BUILD_NUMBER}", link: env.BUILD_URL, result: currentBuild.currentResult, title: JOB_NAME, webhookURL: "$NOTIF"
+                }
+            }    
+        }
+        stage ('activate GCP account'){
+            environment {
+                GCP_SSH_KEY = credentials('rsa-agent-1')
+                GCP_REGISTRY = credentials('gcp_service_account_storage')
+                NOTIF = credentials('DISCORD')
+            }
+            steps {
+                echo "Active GCP Account"
+                sh 'ssh -o StrictHostKeyChecking=no -i $GCP_SSH_KEY perdanar@34.101.141.202 "rm -rf ~/gcp-service-account.json"'
+                sh 'scp -o StrictHostKeyChecking=no -i $GCP_SSH_KEY "$GCP_REGISTRY" perdanar@34.101.141.202:~/gcp-service-account.json'
+                sh 'ssh -o StrictHostKeyChecking=no -i $GCP_SSH_KEY perdanar@34.101.141.202 "gcloud auth activate-service-account $(cat gcp-service-account.json | jq -r .client_email) --key-file=gcp-service-account.json"'
+                sh 'ssh -o StrictHostKeyChecking=no -i $GCP_SSH_KEY perdanar@34.101.141.202 "gcloud auth list"'
+                sh 'ssh -o StrictHostKeyChecking=no -i $GCP_SSH_KEY perdanar@34.101.141.202 "gcloud container clusters get-credentials kubernetes-batch9 --zone asia-southeast2-b --project studi-devops-370205"'
+            }
+        }
+        stage ('Deploy') {
+            environment {
+                KUBE_CONFIG = credentials('kubernetes-batch9')
+                NOTIF = credentials('DISCORD')
+            }
+
+            steps {
+                echo "Deploy App"
+                sh 'helm repo add rizky-charts https://adhithia21.github.io/helm-charts/charts'
+                sh 'helm upgrade --install goapp rizky-charts/application'
+            }
+            post {
+                success {
+                    echo "Post Success"
+                    discordSend description: "Jenkins Pipeline Deploy", footer: "Deploy Success ${BUILD_NUMBER}", link: env.BUILD_URL, result: currentBuild.currentResult, title: JOB_NAME, webhookURL: "$NOTIF"
+                }
+                failure {
+                    echo "Post Failure"
+                    discordSend description: "Jenkins Pipeline Deploy", footer: "Deploy Failure ${BUILD_NUMBER}", link: env.BUILD_URL, result: currentBuild.currentResult, title: JOB_NAME, webhookURL: "$NOTIF"
+                }
+            }
+        }
+    }
+}
