@@ -1,12 +1,10 @@
 pipeline {
-    agent {
-        label 'fire'
-    }
+    agent any
     stages {
         stage ('build') {
             steps {
                 echo "Build App"
-                sh 'docker build -t gcr.io/studi-devops-370205/studidevsecops:${BUILD_NUMBER} .'
+                sh 'docker build -t asia-southeast2-docker.pkg.dev/tugas-devops/go-app:${BUILD_NUMBER} .'
             }
         }
         stage ('Push to GCR') {
@@ -17,7 +15,7 @@ pipeline {
             steps {
                 echo "push to gcr"
                 sh 'cat "$GCP_REGISTRY" | docker login -u _json_key --password-stdin https://gcr.io'
-                sh 'docker push gcr.io/studi-devops-370205/studidevsecops:${BUILD_NUMBER}'
+                sh 'docker push asia-southeast2-docker.pkg.dev/tugas-devops/go-app:${BUILD_NUMBER}'
             }
             post {
                 success {
