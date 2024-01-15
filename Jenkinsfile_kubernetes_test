@@ -4,13 +4,13 @@ pipeline {
         stage ('build') {
             steps {
                 echo "Build App"
-                sh 'docker build -t asia-southeast2-docker.pkg.dev/tugas-devops/go-app:1 .'
+                echo 'docker build -t asia-southeast2-docker.pkg.dev/tugas-devops/go-app:1 .'
             }
         }
         stage ('Push to GCR') {
             steps {
                 echo "push to gcr"
-                sh 'docker push asia-southeast2-docker.pkg.dev/tugas-devops/go-app:1'
+                echo 'docker push asia-southeast2-docker.pkg.dev/tugas-devops/go-app:1'
             }
         }
     }
